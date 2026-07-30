@@ -1,0 +1,52 @@
+name: Ежедневный пост See You Travels
+
+on:
+  schedule:
+    # GitHub использует время UTC. 10:00 UTC = 13:00 по Москве.
+    # Иногда GitHub задерживает запуск на несколько минут при высокой нагрузке — это нормально.
+    - cron: "0 10 * * *"
+  # Кнопка ручного запуска (для теста): вкладка Actions → Run workflow.
+  workflow_dispatch:
+
+# Разрешаем боту сохранять историю тем обратно в репозиторий.
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Забрать код
+        uses: actions/checkout@v4
+
+      - name: Установить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Установить зависимости
+        run: pip install -r requirements.txt
+
+      - name: Опубликовать пост
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+          PEXELS_KEY: ${{ secrets.PEXELS_KEY }}
+        run: python post.py
+
+      - name: Запомнить, какой пост вышел
+        if: success()
+        run: |
+          if [ -n "$(git status --porcelain used_posts.txt)" ]; then
+            git config user.name "see-you-travels-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add used_posts.txt
+            git commit -m "Отметка о публикации: $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "Изменений нет."
+          fi

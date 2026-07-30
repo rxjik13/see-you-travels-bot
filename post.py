@@ -3,28 +3,39 @@
 See You Travels — ежедневный бот-постер для Telegram-канала.
 Версия без ИИ и без оплаты: берёт готовые посты из content_bank.py.
 
-Что делает при запуске:
-  1. Берёт следующий неиспользованный пост из банка (content_bank.py)
-  2. Ищет под него красивое реальное фото: сначала Pexels, если нет — Openverse
-  3. Публикует пост с фото в канал через Telegram-бота
-  4. Запоминает, какой пост уже вышел (used_posts.txt). Когда все использованы — круг начинается заново.
+Логика:
+  - По понедельникам (по Москве) публикует АНОНС путешествия (пул ANNOUNCEMENTS).
+  - В остальные дни — обычную рубрику (пул POSTS).
+  - Каждый пост выходит с подписью рубрики сверху и хэштегами снизу.
+  - Фото подбирается автоматически: Pexels → Openverse.
+  - Что уже выходило, помечается в used_posts.txt (посты — p0,p1…; анонсы — a0,a1…).
+    Когда пул исчерпан — круг начинается заново.
 
-Секреты берутся из переменных окружения (в GitHub — это Secrets):
-  TELEGRAM_TOKEN, TELEGRAM_CHANNEL, PEXELS_KEY (необязательно)
+Секреты (в GitHub — это Secrets): TELEGRAM_TOKEN, TELEGRAM_CHANNEL, PEXELS_KEY.
 """
 
 import os
 import sys
 import json
 import re
+import datetime
+from zoneinfo import ZoneInfo
 
 import requests
 
-from content_bank import POSTS
+from content_bank import POSTS, ANNOUNCEMENTS
+
+TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
+CHANNEL = os.environ["TELEGRAM_CHANNEL"]           # например @see_you_travels
+PEXELS_KEY = os.environ.get("PEXELS_KEY", "").strip()
+
+TZ = ZoneInfo("Europe/Moscow")
+ANNOUNCEMENT_WEEKDAY = 0        # 0 = понедельник — день анонса
+USED_FILE = "used_posts.txt"
+TIMEOUT = 40
 
 # ---------------------------------------------------------------------------
-# Оформление рубрик: подпись сверху + хэштеги снизу (для навигации по темам).
-# Меняется здесь — применяется сразу ко всем постам, текущим и будущим.
+# Оформление рубрик: подпись сверху + хэштеги снизу (навигация по темам).
 # ---------------------------------------------------------------------------
 RUBRIC_META = {
     "Направление недели":       {"emoji": "🗺", "name": "Направление недели", "tag": "#направление_недели", "place": True},
@@ -32,8 +43,13 @@ RUBRIC_META = {
     "Вау-новость мира":         {"emoji": "🌍", "name": "Вау-новости мира",    "tag": "#вау_новости",       "place": True},
     "Лайфхак / совет":          {"emoji": "💡", "name": "Лайфхаки",            "tag": "#лайфхаки",          "place": False},
     "Вдохновение / вовлечение": {"emoji": "✨", "name": "Вдохновение",         "tag": "#вдохновение",       "place": False},
+    "Анонс путешествия":        {"emoji": "🌟", "name": "Авторские путешествия", "tag": "#путешествия_с_нами", "place": False},
 }
 BRAND_TAG = "#SeeYouTravels"
+
+
+def log(msg):
+    print(msg, flush=True)
 
 
 def build_message(item):
@@ -57,47 +73,42 @@ def build_message(item):
     body = f"{header}\n\n{post}" if header else post
     return f"{body}\n\n{' '.join(tags)}"
 
-TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
-CHANNEL = os.environ["TELEGRAM_CHANNEL"]           # например @see_you_travels
-PEXELS_KEY = os.environ.get("PEXELS_KEY", "").strip()
-
-USED_FILE = "used_posts.txt"
-TIMEOUT = 40
-
-
-def log(msg):
-    print(msg, flush=True)
-
 
 # ---------------------------------------------------------------------------
-# Выбор следующего поста (по кругу, без повторов до конца круга)
+# Выбор поста по кругу. prefix: "p" — обычные посты, "a" — анонсы.
 # ---------------------------------------------------------------------------
-def read_used():
+def _read_used():
     try:
         with open(USED_FILE, "r", encoding="utf-8") as f:
-            return {line.strip() for line in f if line.strip()}
+            return [line.strip() for line in f if line.strip()]
     except FileNotFoundError:
-        return set()
+        return []
 
 
-def pick_post():
-    used = read_used()
-    # Все посты уже выходили — начинаем новый круг.
-    if len(used) >= len(POSTS):
-        log("  Все посты из банка использованы — начинаем круг заново.")
-        used = set()
-        open(USED_FILE, "w").close()
-    for i, item in enumerate(POSTS):
-        key = str(i)
-        if key not in used:
-            return i, item
-    # На всякий случай (не должно случиться)
-    return 0, POSTS[0]
+def _write_used(lines):
+    with open(USED_FILE, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines) + ("\n" if lines else ""))
 
 
-def mark_used(index):
+def pick(pool, prefix):
+    used = _read_used()
+    keys = set(used)
+    n = len(pool)
+    # Весь пул использован — сбрасываем только его отметки (prefix + цифры).
+    if all(f"{prefix}{i}" in keys for i in range(n)):
+        log(f"  Пул '{prefix}' пройден полностью — начинаем круг заново.")
+        used = [u for u in used if not re.fullmatch(prefix + r"\d+", u)]
+        _write_used(used)
+        keys = set(used)
+    for i in range(n):
+        if f"{prefix}{i}" not in keys:
+            return i, pool[i]
+    return 0, pool[0]
+
+
+def mark_used(prefix, index):
     with open(USED_FILE, "a", encoding="utf-8") as f:
-        f.write(f"{index}\n")
+        f.write(f"{prefix}{index}\n")
 
 
 # ---------------------------------------------------------------------------
@@ -166,11 +177,19 @@ def send_to_telegram(text_html, image_url):
 
 
 def main():
-    index, item = pick_post()
-    topic = item.get("topic", "пост")
-    query = item.get("image_query", topic)
-    post = item["post"].strip()
-    log(f"Пост #{index} | Рубрика: {item.get('rubric','?')} | Тема: {topic}")
+    now = datetime.datetime.now(TZ)
+    is_announcement_day = now.weekday() == ANNOUNCEMENT_WEEKDAY and bool(ANNOUNCEMENTS)
+
+    if is_announcement_day:
+        prefix, pool = "a", ANNOUNCEMENTS
+        log(f"{now:%Y-%m-%d %H:%M} МСК — ПОНЕДЕЛЬНИК: публикуем анонс путешествия.")
+    else:
+        prefix, pool = "p", POSTS
+        log(f"{now:%Y-%m-%d %H:%M} МСК — обычная рубрика.")
+
+    index, item = pick(pool, prefix)
+    query = item.get("image_query", item.get("topic", ""))
+    log(f"  Пост {prefix}{index} | Рубрика: {item.get('rubric','?')} | Тема: {item.get('topic','')}")
     log(f"  Фото по запросу: {query}")
 
     image_url = get_image(query)
@@ -178,7 +197,7 @@ def main():
 
     text = build_message(item)
     send_to_telegram(text, image_url)
-    mark_used(index)
+    mark_used(prefix, index)
 
 
 if __name__ == "__main__":

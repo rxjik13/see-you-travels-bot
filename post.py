@@ -16,10 +16,46 @@ See You Travels — ежедневный бот-постер для Telegram-к�
 import os
 import sys
 import json
+import re
 
 import requests
 
 from content_bank import POSTS
+
+# ---------------------------------------------------------------------------
+# Оформление рубрик: подпись сверху + хэштеги снизу (для навигации по темам).
+# Меняется здесь — применяется сразу ко всем постам, текущим и будущим.
+# ---------------------------------------------------------------------------
+RUBRIC_META = {
+    "Направление недели":       {"emoji": "🗺", "name": "Направление недели", "tag": "#направление_недели", "place": True},
+    "Скрытые места":            {"emoji": "📍", "name": "Скрытые места",       "tag": "#скрытые_места",      "place": True},
+    "Вау-новость мира":         {"emoji": "🌍", "name": "Вау-новости мира",    "tag": "#вау_новости",       "place": True},
+    "Лайфхак / совет":          {"emoji": "💡", "name": "Лайфхаки",            "tag": "#лайфхаки",          "place": False},
+    "Вдохновение / вовлечение": {"emoji": "✨", "name": "Вдохновение",         "tag": "#вдохновение",       "place": False},
+}
+BRAND_TAG = "#SeeYouTravels"
+
+
+def build_message(item):
+    """Собирает финальный текст: подпись рубрики + сам пост + хэштеги."""
+    post = item["post"].strip()
+    rubric = item.get("rubric", "")
+    topic = item.get("topic", "").strip()
+    meta = RUBRIC_META.get(rubric)
+
+    tags = []
+    header = None
+    if meta:
+        header = f'{meta["emoji"]} <i>Рубрика «{meta["name"]}»</i>'
+        tags.append(meta["tag"])
+        if meta["place"] and topic:
+            topic_tag = "#" + re.sub(r"[^0-9A-Za-zА-Яа-яЁё]", "", topic)
+            if len(topic_tag) > 2:
+                tags.append(topic_tag)
+    tags.append(BRAND_TAG)
+
+    body = f"{header}\n\n{post}" if header else post
+    return f"{body}\n\n{' '.join(tags)}"
 
 TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
 CHANNEL = os.environ["TELEGRAM_CHANNEL"]           # например @see_you_travels
@@ -140,7 +176,8 @@ def main():
     image_url = get_image(query)
     log(f"  Фото: {image_url or 'не найдено — публикуем без картинки'}")
 
-    send_to_telegram(post, image_url)
+    text = build_message(item)
+    send_to_telegram(text, image_url)
     mark_used(index)
 
 

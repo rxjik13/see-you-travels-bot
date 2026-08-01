@@ -32,7 +32,6 @@ PEXELS_KEY = os.environ.get("PEXELS_KEY", "").strip()
 TZ = ZoneInfo("Europe/Moscow")
 ANNOUNCEMENT_WEEKDAY = 0        # 0 = понедельник — день анонса
 USED_FILE = "used_posts.txt"
-LAST_POST_FILE = "last_post_date.txt"   # дата последней публикации (защита от дублей)
 TIMEOUT = 40
 
 # ---------------------------------------------------------------------------
@@ -112,20 +111,10 @@ def mark_used(prefix, index):
         f.write(f"{prefix}{index}\n")
 
 
-# ---------------------------------------------------------------------------
-# Защита от дублей: не больше одного поста в календарный день (по Москве).
-# ---------------------------------------------------------------------------
-def read_last_post_date():
-    try:
-        with open(LAST_POST_FILE, "r", encoding="utf-8") as f:
-            return f.read().strip()
-    except FileNotFoundError:
-        return ""
-
-
-def write_last_post_date(date_str):
-    with open(LAST_POST_FILE, "w", encoding="utf-8") as f:
-        f.write(date_str + "\n")
+# Защита от дублей: отметка дня публикации хранится в том же used_posts.txt
+# в виде строки "d:2026-08-01". Так ничего в расписании менять не нужно.
+def already_posted_today(today):
+    return f"d:{today}" in set(_read_used())
 
 
 # ---------------------------------------------------------------------------
@@ -198,9 +187,7 @@ def main():
     today = now.strftime("%Y-%m-%d")
 
     # Защита от дублей: если сегодня уже публиковали — выходим без поста.
-    # Это позволяет ставить в расписание несколько запусков-подстраховок,
-    # но в канал всё равно уйдёт ровно один пост в день.
-    if read_last_post_date() == today:
+    if already_posted_today(today):
         log(f"{today}: сегодня уже публиковали — пропускаем (защита от дублей).")
         return
 
@@ -224,7 +211,7 @@ def main():
     text = build_message(item)
     send_to_telegram(text, image_url)
     mark_used(prefix, index)
-    write_last_post_date(today)   # отмечаем, что сегодня пост уже вышел
+    mark_used("d:", today)   # отмечаем, что сегодня пост уже вышел
 
 
 if __name__ == "__main__":

@@ -1,0 +1,54 @@
+name: Ежедневный пост See You Travels
+
+on:
+  schedule:
+    # Время в UTC. Москва = UTC+3.
+    # Две попытки-подстраховки в день: если GitHub задержит или пропустит первую,
+    # сработает вторая. Защита от дублей в коде гарантирует РОВНО один пост в день.
+    # Смещение на :10 (не ровный час) — так GitHub запускает точнее, без давки в :00.
+    - cron: "10 10 * * *"   # ~13:10 по Москве (основная)
+    - cron: "10 12 * * *"   # ~15:10 по Москве (подстраховка)
+  # Кнопка ручного запуска (обычно не нужна).
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-post
+  cancel-in-progress: false
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Забрать код
+        uses: actions/checkout@v4
+
+      - name: Установить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Установить зависимости
+        run: pip install -r requirements.txt
+
+      - name: Опубликовать пост
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+          PEXELS_KEY: ${{ secrets.PEXELS_KEY }}
+        run: python post.py
+
+      - name: Запомнить, что вышло сегодня
+        if: success()
+        run: |
+          git add used_posts.txt last_post_date.txt 2>/dev/null || true
+          if [ -n "$(git status --porcelain)" ]; then
+            git config user.name "see-you-travels-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git commit -m "Отметка о публикации: $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "Изменений нет — сегодня уже публиковали."
+          fi

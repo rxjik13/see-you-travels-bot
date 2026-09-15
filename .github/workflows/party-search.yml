@@ -1,0 +1,74 @@
+name: Поиск вечеринок See You Travels
+
+on:
+  schedule:
+    # Время в UTC. Москва = UTC+3. 09:10 UTC = 12:10 по Москве.
+    # По умолчанию — каждый четверг (чтобы к выходным знать, куда идти).
+    # Хотите чаще — например каждый день: "10 9 * * *".
+    - cron: "10 9 * * 4"
+  # Кнопка ручного запуска: вкладка Actions → «Поиск вечеринок» → Run workflow.
+  workflow_dispatch:
+    inputs:
+      city:
+        description: "Город по-русски (пусто = Каш)"
+        required: false
+        default: ""
+      city_en:
+        description: "Город латиницей (пусто = Kaş)"
+        required: false
+        default: ""
+      show_all:
+        description: "Показать всё найденное, даже то, что уже публиковали"
+        type: boolean
+        default: false
+
+# Разрешаем боту сохранять список уже опубликованных ссылок обратно в репозиторий.
+permissions:
+  contents: write
+
+concurrency:
+  group: party-search
+  cancel-in-progress: false
+
+jobs:
+  search:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Забрать код
+        uses: actions/checkout@v4
+
+      - name: Установить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Установить зависимости
+        run: pip install -r requirements.txt
+
+      - name: Найти вечеринки и отправить дайджест
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHANNEL: ${{ secrets.TELEGRAM_CHANNEL }}
+          # Куда слать дайджест. Если секрет PARTY_CHAT не задан — уйдёт в TELEGRAM_CHANNEL.
+          PARTY_CHAT: ${{ secrets.PARTY_CHAT }}
+          # Необязательно: ключ Claude для умного поиска по интернету.
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          PARTY_CITY: ${{ github.event.inputs.city }}
+          PARTY_CITY_EN: ${{ github.event.inputs.city_en }}
+        run: |
+          EXTRA=""
+          if [ "${{ github.event.inputs.show_all }}" = "true" ]; then EXTRA="--all"; fi
+          python party_search.py $EXTRA
+
+      - name: Запомнить, что уже показывали
+        if: success()
+        run: |
+          if [ -n "$(git status --porcelain party_seen.txt)" ]; then
+            git config user.name "see-you-travels-bot"
+            git config user.email "bot@users.noreply.github.com"
+            git add party_seen.txt
+            git commit -m "Дайджест вечеринок: $(date -u +%Y-%m-%d)"
+            git push
+          else
+            echo "Изменений нет."
+          fi

@@ -1,25 +1,27 @@
 <!doctype html><html><head><meta charset="utf-8"><style>
 *{margin:0;box-sizing:border-box}
-body{width:1080px;height:1350px;background:#14110f;font-family:Inter,sans-serif;color:#f3ece2}
-.c{position:absolute;inset:48px;border:1px solid #6b5a44;padding:110px 96px;display:flex;flex-direction:column}
-.brand{font:500 22px Inter;letter-spacing:.42em;color:#c9a46a;text-transform:uppercase}
-.name{font:400 92px 'Liberation Serif',serif;margin-top:150px;line-height:1.02}
-.role{font:300 30px Inter;color:#b8ab99;margin-top:26px}
-.line{width:96px;height:1px;background:#c9a46a;margin:70px 0 64px}
-.row{display:flex;align-items:baseline;gap:28px;margin-bottom:34px}
-.k{width:250px;white-space:nowrap;font:500 18px Inter;letter-spacing:.24em;color:#8c7d68;text-transform:uppercase}
-.v{font:400 34px Inter}
-.ph{color:#c9a46a;font-style:italic}
-.foot{margin-top:auto;font:300 22px Inter;color:#8c7d68;letter-spacing:.06em}
-</style></head><body><div class="c">
+body{width:1080px;height:1350px;background:#14110f;font-family:Inter,sans-serif;color:#f3ece2;position:relative;overflow:hidden}
+.photo{position:absolute;right:0;top:0;width:560px;height:1350px;background:url(photo.jpg) center 18%/cover}
+.photo:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,#14110f 0%,rgba(20,17,15,.55) 22%,rgba(20,17,15,0) 55%),linear-gradient(0deg,rgba(20,17,15,.7) 0%,rgba(20,17,15,0) 30%)}
+.frame{position:absolute;inset:48px;border:1px solid rgba(201,164,106,.45);pointer-events:none}
+.c{position:absolute;left:110px;top:150px;bottom:150px;width:560px;display:flex;flex-direction:column}
+.brand{font:500 20px Inter;letter-spacing:.42em;color:#c9a46a;text-transform:uppercase}
+.name{font:400 84px 'Liberation Serif',serif;margin-top:120px;line-height:1.02}
+.role{font:300 26px Inter;color:#b8ab99;margin-top:26px;line-height:1.4}
+.line{width:96px;height:1px;background:#c9a46a;margin:60px 0 56px}
+.k{font:500 15px Inter;letter-spacing:.26em;color:#8c7d68;text-transform:uppercase;margin-bottom:8px}
+.v{font:400 30px Inter;margin-bottom:34px}
+.foot{margin-top:auto;font:300 19px Inter;color:#8c7d68;letter-spacing:.04em}
+</style></head><body>
+<div class="photo"></div><div class="frame"></div>
+<div class="c">
 <div class="brand">See You Travels</div>
-<div class="name"><span class="ph">Имя Фамилия</span></div>
-<div class="role">Основатель · авторские путешествия</div>
+<div class="name">Екатерина<br>Шаталова</div>
+<div class="role">Основатель See You Travels</div>
 <div class="line"></div>
-<div class="row"><div class="k">Сайт</div><div class="v ph">site.ru</div></div>
-<div class="row"><div class="k">Instagram</div><div class="v">@shatal.ket</div></div>
-<div class="row"><div class="k">Telegram</div><div class="v ph">@личный</div></div>
-<div class="row"><div class="k">Inst · See You</div><div class="v">@seeyou.travels</div></div>
-<div class="row"><div class="k">TG · See You</div><div class="v">@see_you_travels</div></div>
-<div class="foot">Премиальные групповые путешествия для предпринимателей</div>
+<div class="k">Сайт</div><div class="v">seeyoutravelss.netlify.app</div>
+<div class="k">Instagram</div><div class="v">@shatal.ket</div>
+<div class="k">Instagram · See You</div><div class="v">@seeyou.travels</div>
+<div class="k">Telegram · See You</div><div class="v">@see_you_travels</div>
+<div class="foot">Премиальные групповые путешествия<br>для предпринимателей</div>
 </div></body></html>
